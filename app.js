@@ -165,10 +165,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const textInput = document.getElementById('textInput');
     textInput.addEventListener('input', checkDepositState);
 
-    // Event Listeners - Audio
-    document.getElementById('btnRecord').addEventListener('click', startRecording);
-    document.getElementById('btnStopRecord').addEventListener('click', stopRecording);
+    // Event Listeners - Audio Native
+    const audioInput = document.getElementById('audioInput');
+    audioInput.addEventListener('change', handleAudioInput);
     document.getElementById('btnDeleteAudio').addEventListener('click', deleteAudioPreview);
+    document.getElementById('btnDownloadAudio').addEventListener('click', downloadCurrentAudio);
 
     // Event Listeners - Deposita
     document.getElementById('btnDeposit').addEventListener('click', handleDeposit);
@@ -203,78 +204,45 @@ function updateQuestionUI() {
     }
 }
 
-// --- LOGICA AUDIO ---
-async function startRecording() {
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        state.mediaRecorder = new MediaRecorder(stream);
-        state.audioChunks = [];
-
-        state.mediaRecorder.ondataavailable = event => {
-            if (event.data.size > 0) {
-                state.audioChunks.push(event.data);
-            }
-        };
-
-        state.mediaRecorder.onstop = () => {
-            state.audioBlob = new Blob(state.audioChunks, { type: 'audio/webm' });
-            const audioUrl = URL.createObjectURL(state.audioBlob);
-            document.getElementById('audioPreview').src = audioUrl;
-            
-            // UI Aggiornamento
-            document.getElementById('audioControls').classList.add('hidden');
-            document.getElementById('audioPreviewContainer').classList.remove('hidden');
-            document.getElementById('textInput').classList.add('hidden'); // Nascondi testo se c'è audio
-            
-            checkDepositState();
-        };
-
-        state.mediaRecorder.start();
-        state.isRecording = true;
+// --- LOGICA AUDIO NATIVA (iOS PWA) ---
+function handleAudioInput(event) {
+    const file = event.target.files[0];
+    if (file) {
+        state.audioBlob = file;
+        const audioUrl = URL.createObjectURL(file);
+        document.getElementById('audioPreview').src = audioUrl;
         
-        // UI
-        document.getElementById('btnRecord').classList.add('hidden');
-        document.getElementById('btnStopRecord').classList.remove('hidden');
-        document.getElementById('recordingStatus').classList.remove('hidden');
-        document.getElementById('micError').classList.add('hidden');
-        document.getElementById('textInput').disabled = true;
-
-        // Timer
-        state.recordingTime = 0;
-        document.getElementById('recordingTime').innerText = '0:00';
-        state.recordingInterval = setInterval(() => {
-            state.recordingTime++;
-            const m = Math.floor(state.recordingTime / 60);
-            const s = String(state.recordingTime % 60).padStart(2, '0');
-            document.getElementById('recordingTime').innerText = `${m}:${s}`;
-        }, 1000);
-
-    } catch (err) {
-        console.error("Errore microfono:", err);
-        document.getElementById('micError').classList.remove('hidden');
+        // UI Aggiornamento
         document.getElementById('audioControls').classList.add('hidden');
+        document.getElementById('audioPreviewContainer').classList.remove('hidden');
+        document.getElementById('textInput').classList.add('hidden'); // Nascondi testo se c'è audio
+        
+        checkDepositState();
     }
 }
 
-function stopRecording() {
-    if (state.mediaRecorder && state.isRecording) {
-        state.mediaRecorder.stop();
-        state.mediaRecorder.stream.getTracks().forEach(track => track.stop()); // Spegni mic
-        state.isRecording = false;
-        clearInterval(state.recordingInterval);
-        
-        // UI resettata (tranne preview che viene mostrata in onstop)
-        document.getElementById('btnRecord').classList.remove('hidden');
-        document.getElementById('btnStopRecord').classList.add('hidden');
-        document.getElementById('recordingStatus').classList.add('hidden');
-        document.getElementById('textInput').disabled = false;
+function downloadCurrentAudio() {
+    if (state.audioBlob) {
+        const url = URL.createObjectURL(state.audioBlob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        // Il file nativo da iPhone spesso è un .m4a o .wav
+        const ext = state.audioBlob.type.includes('mp4') ? 'm4a' : 'weba';
+        a.download = `idea_vocale_${getTodayString()}.${ext}`;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 100);
     }
 }
 
 function deleteAudioPreview() {
     state.audioBlob = null;
-    state.audioChunks = [];
     document.getElementById('audioPreview').src = "";
+    document.getElementById('audioInput').value = ""; // Resetta input
     
     // UI
     document.getElementById('audioControls').classList.remove('hidden');
@@ -384,7 +352,6 @@ async function renderArchive() {
         
         container.appendChild(div);
 
-        // Se ha audio, caricalo asincronamente
         if (item.hasAudio) {
             const audioBlob = await getAudioFromDB(item.id);
             if (audioBlob) {
@@ -393,7 +360,26 @@ async function renderArchive() {
                 audioEl.controls = true;
                 audioEl.src = url;
                 audioEl.className = 'archive-audio';
-                document.getElementById(`audio-container-${item.id}`).appendChild(audioEl);
+                
+                const downloadBtn = document.createElement('button');
+                downloadBtn.className = 'btn-text';
+                downloadBtn.style.color = 'var(--accent-color)';
+                downloadBtn.style.display = 'block';
+                downloadBtn.innerText = 'Salva nei File';
+                downloadBtn.onclick = () => {
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    const ext = audioBlob.type.includes('mp4') ? 'm4a' : 'weba';
+                    a.download = `idea_${item.date}.${ext}`;
+                    document.body.appendChild(a);
+                    a.click();
+                    setTimeout(() => document.body.removeChild(a), 100);
+                };
+
+                const container = document.getElementById(`audio-container-${item.id}`);
+                container.appendChild(audioEl);
+                container.appendChild(downloadBtn);
             } else {
                 document.getElementById(`audio-container-${item.id}`).innerText = "Audio non trovato.";
             }

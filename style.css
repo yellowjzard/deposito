@@ -163,6 +163,17 @@ textarea:focus {
     border-radius: 12px;
 }
 
+.audio-actions {
+    display: flex;
+    gap: 1.5rem;
+    width: 100%;
+}
+
+.audio-hint {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
 audio {
     width: 100%;
     height: 40px;

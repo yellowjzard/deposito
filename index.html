@@ -27,21 +27,22 @@
             <!-- Testo -->
             <textarea id="textInput" placeholder="Scrivi qui la tua idea..."></textarea>
             
-            <!-- Controlli Audio -->
+            <!-- Controlli Audio (Natali per iOS) -->
             <div id="audioControls" class="audio-controls">
-                <button id="btnRecord" class="btn-icon" aria-label="Registra audio">
+                <input type="file" id="audioInput" accept="audio/*" capture="microphone" class="hidden">
+                <button id="btnRecord" class="btn-icon" aria-label="Registra audio" onclick="document.getElementById('audioInput').click()">
                     <span class="icon record-icon"></span>
                 </button>
-                <div id="recordingStatus" class="hidden">Registrazione in corso... <span id="recordingTime">0:00</span></div>
-                <button id="btnStopRecord" class="btn-icon hidden" aria-label="Ferma registrazione">
-                    <span class="icon stop-icon"></span>
-                </button>
+                <div class="audio-hint">Tocca per registrare con iPhone</div>
             </div>
 
             <!-- Anteprima Audio -->
             <div id="audioPreviewContainer" class="hidden">
                 <audio id="audioPreview" controls></audio>
-                <button id="btnDeleteAudio" class="btn-text danger">Elimina audio</button>
+                <div class="audio-actions">
+                    <button id="btnDeleteAudio" class="btn-text danger">Elimina</button>
+                    <button id="btnDownloadAudio" class="btn-text" style="color: var(--accent-color);">Salva nei File</button>
+                </div>
             </div>
             
             <div id="micError" class="error-msg hidden">Microfono non disponibile. Puoi comunque scrivere.</div>

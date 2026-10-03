@@ -1,4 +1,4 @@
-const CACHE_NAME = 'deposito-v2';
+const CACHE_NAME = 'deposito-v3';
 const urlsToCache = [
   './',
   './index.html',

@@ -165,9 +165,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const textInput = document.getElementById('textInput');
     textInput.addEventListener('input', checkDepositState);
 
-    // Event Listeners - Audio Native
-    const audioInput = document.getElementById('audioInput');
-    audioInput.addEventListener('change', handleAudioInput);
+    // Event Listeners - Audio
+    document.getElementById('btnRecord').addEventListener('click', startRecording);
+    document.getElementById('btnStopRecord').addEventListener('click', stopRecording);
     document.getElementById('btnDeleteAudio').addEventListener('click', deleteAudioPreview);
     document.getElementById('btnDownloadAudio').addEventListener('click', downloadCurrentAudio);
 
@@ -204,20 +204,80 @@ function updateQuestionUI() {
     }
 }
 
-// --- LOGICA AUDIO NATIVA (iOS PWA) ---
-function handleAudioInput(event) {
-    const file = event.target.files[0];
-    if (file) {
-        state.audioBlob = file;
-        const audioUrl = URL.createObjectURL(file);
-        document.getElementById('audioPreview').src = audioUrl;
+// --- LOGICA AUDIO ---
+async function startRecording() {
+    try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            throw new Error("Il tuo browser non supporta la registrazione audio.");
+        }
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        state.mediaRecorder = new MediaRecorder(stream);
+        state.audioChunks = [];
+
+        state.mediaRecorder.ondataavailable = event => {
+            if (event.data.size > 0) {
+                state.audioChunks.push(event.data);
+            }
+        };
+
+        state.mediaRecorder.onstop = () => {
+            // FIX IOS: Usa il mimeType del recorder o fallback su mp4/webm, 
+            // ma soprattutto non forzare webm se Safari ha registrato mp4
+            const mimeType = state.mediaRecorder.mimeType || state.audioChunks[0]?.type || 'audio/mp4';
+            state.audioBlob = new Blob(state.audioChunks, { type: mimeType });
+            
+            const audioUrl = URL.createObjectURL(state.audioBlob);
+            document.getElementById('audioPreview').src = audioUrl;
+            
+            // UI Aggiornamento
+            document.getElementById('audioControls').classList.add('hidden');
+            document.getElementById('audioPreviewContainer').classList.remove('hidden');
+            document.getElementById('textInput').classList.add('hidden'); // Nascondi testo se c'è audio
+            
+            checkDepositState();
+        };
+
+        state.mediaRecorder.start();
+        state.isRecording = true;
         
-        // UI Aggiornamento
+        // UI
+        document.getElementById('btnRecord').classList.add('hidden');
+        document.getElementById('btnStopRecord').classList.remove('hidden');
+        document.getElementById('recordingStatus').classList.remove('hidden');
+        document.getElementById('micError').classList.add('hidden');
+        document.getElementById('textInput').disabled = true;
+
+        // Timer
+        state.recordingTime = 0;
+        document.getElementById('recordingTime').innerText = '0:00';
+        state.recordingInterval = setInterval(() => {
+            state.recordingTime++;
+            const m = Math.floor(state.recordingTime / 60);
+            const s = String(state.recordingTime % 60).padStart(2, '0');
+            document.getElementById('recordingTime').innerText = `${m}:${s}`;
+        }, 1000);
+
+    } catch (err) {
+        console.error("Errore microfono:", err);
+        const errEl = document.getElementById('micError');
+        errEl.innerText = "Errore microfono: " + err.message + ". Puoi comunque scrivere.";
+        errEl.classList.remove('hidden');
         document.getElementById('audioControls').classList.add('hidden');
-        document.getElementById('audioPreviewContainer').classList.remove('hidden');
-        document.getElementById('textInput').classList.add('hidden'); // Nascondi testo se c'è audio
+    }
+}
+
+function stopRecording() {
+    if (state.mediaRecorder && state.isRecording) {
+        state.mediaRecorder.stop();
+        state.mediaRecorder.stream.getTracks().forEach(track => track.stop()); // Spegni mic
+        state.isRecording = false;
+        clearInterval(state.recordingInterval);
         
-        checkDepositState();
+        // UI resettata (tranne preview che viene mostrata in onstop)
+        document.getElementById('btnRecord').classList.remove('hidden');
+        document.getElementById('btnStopRecord').classList.add('hidden');
+        document.getElementById('recordingStatus').classList.add('hidden');
+        document.getElementById('textInput').disabled = false;
     }
 }
 
@@ -241,8 +301,8 @@ function downloadCurrentAudio() {
 
 function deleteAudioPreview() {
     state.audioBlob = null;
+    state.audioChunks = [];
     document.getElementById('audioPreview').src = "";
-    document.getElementById('audioInput').value = ""; // Resetta input
     
     // UI
     document.getElementById('audioControls').classList.remove('hidden');
